@@ -1,0 +1,5 @@
+{
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "required_builder_prefix": "https://github.com/actions/",
+  "notes": "Demo expectation only. Real verification would check OIDC issuer/audience and signature."
+}

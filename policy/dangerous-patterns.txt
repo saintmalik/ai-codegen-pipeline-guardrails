@@ -1,0 +1,29 @@
+# Dangerous patterns for AI-generated / agent-proposed code.
+# Used by scripts/guardrails/dangerous-patterns.sh (ripgrep/grep).
+# Keep rules simple for the talk; graduate to Semgrep when ready.
+
+# id: secret-hardcoded-key
+# severity: high
+# note: demo shapes only — not a full secret engine
+sk_live_[A-Za-z0-9]{8,}
+AKIA[0-9A-Z]{16}
+-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----
+
+# id: python-eval-exec
+# severity: high
+\beval\s*\(
+\bexec\s*\(
+subprocess\.[A-Za-z_]+\([^)]*shell\s*=\s*True
+
+# id: curl-pipe-bash
+# severity: high
+curl[^\n]*\|\s*(ba)?sh
+wget[^\n]*\|\s*(ba)?sh
+
+# id: python-os-system
+# severity: medium
+os\.system\s*\(
+
+# id: unchecked-yaml-load
+# severity: medium
+yaml\.load\s*\([^)]*\)

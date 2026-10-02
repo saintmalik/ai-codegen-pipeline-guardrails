@@ -1,0 +1,24 @@
+# Optional Semgrep starter — used only if `semgrep` is on PATH.
+# Graduate grep heuristics here when the talk audience asks "what about real SAST?"
+
+rules:
+  - id: ai-codegen.python-eval
+    message: "Avoid eval() in agent-proposed code; use an explicit handler map."
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: eval(...)
+
+  - id: ai-codegen.subprocess-shell
+    message: "subprocess with shell=True is blocked for AI-generated PRs."
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+
+  - id: ai-codegen.os-system
+    message: "os.system is blocked for AI-generated PRs."
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: os.system(...)

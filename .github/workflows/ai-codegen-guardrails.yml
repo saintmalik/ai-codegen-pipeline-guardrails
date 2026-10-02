@@ -1,0 +1,67 @@
+name: AI codegen pipeline guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # For a real OIDC-to-manager / cloud federated path:
+  id-token: write
+  pull-requests: read
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    env:
+      DEMO_OIDC_READY: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Materialize PR meta for human-review gate
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          # When running on the repo itself, scan the working tree.
+          # Synthesize pr-meta.yaml from PR labels so human-review.sh works in CI.
+          ai=false
+          echo ",${PR_LABELS}," | grep -qi ',ai-generated,' && ai=true || true
+          {
+            echo "author: ${{ github.actor }}"
+            echo "title: |"
+            echo "  ${{ github.event.pull_request.title }}"
+            echo "ai-generated: ${ai}"
+            echo "labels:"
+            IFS=',' read -r -a labels <<< "${PR_LABELS}"
+            for lab in "${labels[@]}"; do
+              [ -z "$lab" ] && continue
+              echo "  - ${lab}"
+            done
+          } > pr-meta.yaml
+          # Local demo fixtures already ship pr-meta; keep both paths honest.
+          mkdir -p attestations
+          if [ ! -f attestations/ci-job.intoto.jsonl ]; then
+            cp fixtures/good/attestations/ci-job.intoto.jsonl attestations/ 2>/dev/null || \
+              echo '{"predicateType":"https://slsa.dev/provenance/v0.2","subject":[{"name":"ci"}],"predicate":{"builder":{"id":"https://github.com/actions/runner"}}}' \
+              > attestations/ci-job.intoto.jsonl
+          fi
+
+      - name: Run guardrails (working tree)
+        run: ./scripts/run-guardrails.sh .
+
+      - name: Also prove bad fixture still fails (talk self-check)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set +e
+          ./scripts/run-guardrails.sh fixtures/bad
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "bad fixture unexpectedly passed"
+            exit 1
+          fi
+          echo "bad fixture blocked as expected"
+          ./scripts/run-guardrails.sh fixtures/good

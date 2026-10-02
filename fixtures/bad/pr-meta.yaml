@@ -1,0 +1,5 @@
+# Simulated agent PR metadata (good path uses security-reviewed).
+labels: []
+author: agent-bot
+title: "feat: add configurable webhook dispatcher"
+ai-generated: true

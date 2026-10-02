@@ -1,0 +1,7 @@
+# Simulated agent PR after human security review.
+labels:
+  - ai-generated
+  - security-reviewed
+author: agent-bot
+title: "feat: add configurable webhook dispatcher"
+ai-generated: true

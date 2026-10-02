@@ -1,0 +1,14 @@
+# Dependency allowlist for AI-proposed changes.
+# Format: one package name per line (PyPI / npm style simple names).
+# Lines starting with # are comments.
+
+# Runtime (baseline app)
+flask
+
+# Allowed transitive / tooling the agent may add
+requests
+pyyaml
+
+# Explicitly NOT listed (demo deny):
+# - pickle5 (unnecessary; agents sometimes add it for "serialization helpers")
+# - openai (pulling model SDKs into a webhook path is out of policy here)
