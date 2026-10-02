@@ -53,10 +53,10 @@ Walk the bad fixture:
 
 **Slide:** Defense in depth for codegen PRs
 
-1. Secret scan (shape + entropy heuristics)  
-2. Pattern SAST (dangerous APIs / shell pipes)  
+1. Credential scan (known key shapes)  
+2. Pattern SAST (dangerous APIs / shell pipes; Semgrep if present)  
 3. Dependency allowlist (policy as text)  
-4. Human review label / CODEOWNERS  
+4. Human review label (`security-reviewed` on `ai-generated` PRs)  
 5. Optional OIDC/attest stub (identity of the *job*, not the model)
 
 **Talk note:** Aligns with CI identity work (short-lived OIDC) and agent-trust

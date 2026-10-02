@@ -1,0 +1,2 @@
+# Educational demo — intentional insecure samples under fixtures/bad only.
+# No warranty. Do not deploy fixtures/bad.
