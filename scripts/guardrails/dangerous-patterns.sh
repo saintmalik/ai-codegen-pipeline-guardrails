@@ -30,6 +30,8 @@ else
     | grep -v '/fixtures/bad/' \
     | grep -v '/\.demo-work/' \
     | grep -v '/scripts/guardrails/' \
+    | grep -v '/\.semgrep/' \
+    | grep -v '/policy/' \
     >"$files_tmp" || true
 fi
 

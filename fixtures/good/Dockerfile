@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app/ /app/app/
 
-USER nobody
+USER 65534:65534
 
 CMD ["python", "-m", "app.src.webhook"]
