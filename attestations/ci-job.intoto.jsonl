@@ -1,0 +1,25 @@
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "subject": [
+    {
+      "name": "fixtures/good",
+      "digest": { "sha256": "demo000000000000000000000000000000000000000000000000000000000001" }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "predicate": {
+    "builder": { "id": "https://github.com/actions/runner" },
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://example.invalid/ai-codegen-pipeline-guardrails@refs/heads/demo",
+        "digest": { "sha1": "demodemo" }
+      }
+    },
+    "metadata": {
+      "buildInvocationId": "demo-local-stub",
+      "completeness": { "parameters": true, "environment": false, "materials": false },
+      "reproducible": false
+    },
+    "materials": []
+  }
+}

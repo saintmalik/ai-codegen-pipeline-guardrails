@@ -1,4 +1,4 @@
-# Baseline app image — hadolint-clean path for the demo repo.
+# Fixed Dockerfile — same runtime story, hadolint-clean.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -10,4 +10,4 @@ COPY app/ /app/app/
 
 USER 65534:65534
 
-CMD ["python", "-m", "app.src.health"]
+CMD ["python", "-m", "app.src.webhook"]
