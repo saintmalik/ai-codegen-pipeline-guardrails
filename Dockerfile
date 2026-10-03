@@ -1,13 +1,11 @@
-# Baseline app image — hadolint-clean path for the demo repo.
-FROM python:3.12-slim
+# INTENTIONALLY BAD — agent-proposed Dockerfile (hadolint should fail).
+FROM python:latest
 
+RUN apt-get update && apt-get install -y curl wget
+
+COPY . /app
 WORKDIR /app
 
-COPY app/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+ENV SECRET_KEY=hardcoded-demo-secret
 
-COPY app/ /app/app/
-
-USER 65534:65534
-
-CMD ["python", "-m", "app.src.health"]
+CMD python app/src/webhook.py
