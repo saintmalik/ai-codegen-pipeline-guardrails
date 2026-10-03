@@ -1,4 +1,4 @@
-# AI Codegen Pipeline Guardrails — local + CI entrypoints
+# AI Code Guardrails — Devfest Ado Ekiti 2026
 
 .PHONY: demo demo-fail demo-pass guardrails-bad guardrails-good clean help
 

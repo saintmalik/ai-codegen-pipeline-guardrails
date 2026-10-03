@@ -1,0 +1,10 @@
+# CODEOWNERS — enable "Require review from Code Owners" on the default branch.
+# Talk beat: Review / approve is human; CI scans + gates, then humans approve.
+# Pair with the human-review job (security-reviewed label on ai-generated PRs)
+# and branch protection requiring the "gate" check.
+
+/.github/workflows/ @saintmalik
+/.github/CODEOWNERS @saintmalik
+/.semgrep/ @saintmalik
+/policy/ @saintmalik
+/scripts/ @saintmalik

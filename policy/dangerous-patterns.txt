@@ -1,6 +1,6 @@
 # Dangerous patterns for AI-generated / agent-proposed code.
-# Used by scripts/guardrails/dangerous-patterns.sh (ripgrep/grep).
-# Keep rules simple for the talk; graduate to Semgrep when ready.
+# Used by scripts/guardrails/credential-scan.sh and sast.sh (grep heuristics).
+# Semgrep rules live in .semgrep/ for the CI/container path.
 
 # id: secret-hardcoded-key
 # severity: high

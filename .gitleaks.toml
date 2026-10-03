@@ -1,0 +1,16 @@
+# Gitleaks config for the demo repo.
+# Intentional insecure samples under fixtures/bad must not poison PR scans.
+# Docs: https://github.com/gitleaks/gitleaks
+
+title = "ai-code-guardrails"
+
+[extend]
+# Use default gitleaks rules (AWS keys, Stripe-shaped secrets, private keys, …)
+useDefault = true
+
+[allowlist]
+description = "Demo fixtures (intentional insecure samples)"
+paths = [
+  '''(^|/)fixtures/bad/''',
+  '''(^|/)\.demo-work/''',
+]

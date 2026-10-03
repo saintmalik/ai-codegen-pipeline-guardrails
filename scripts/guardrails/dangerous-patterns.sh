@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Dangerous pattern SAST (eval/exec/shell=True/curl|bash). Optional Semgrep.
+# Dangerous-pattern heuristics (eval/exec/shell=True/curl|bash).
+# Used by the sast job (CI after CodeQL + local sast.sh) and as a named local check.
 set -euo pipefail
 
 TARGET="${GUARDRAILS_TARGET:?}"
@@ -10,22 +11,6 @@ scanning_bad_fixture=0
 case "$TARGET" in
   */fixtures/bad|*/fixtures/bad/) scanning_bad_fixture=1 ;;
 esac
-
-if command -v semgrep >/dev/null 2>&1 && [ -d "$ROOT/policy/semgrep" ]; then
-  echo "(optional) semgrep scan…"
-  if [ "$scanning_bad_fixture" -eq 1 ]; then
-    semgrep --quiet --error --config "$ROOT/policy/semgrep" "$TARGET" || {
-      echo "Semgrep reported findings."
-      exit 1
-    }
-  else
-    semgrep --quiet --error --config "$ROOT/policy/semgrep" \
-      --exclude 'fixtures/bad' "$TARGET" || {
-      echo "Semgrep reported findings."
-      exit 1
-    }
-  fi
-fi
 
 files_tmp="$(mktemp)"
 trap 'rm -f "$files_tmp"' EXIT
@@ -41,13 +26,18 @@ collect_files() {
 if [ "$scanning_bad_fixture" -eq 1 ]; then
   collect_files "$TARGET" >"$files_tmp"
 else
-  collect_files "$TARGET" | grep -v '/fixtures/bad/' >"$files_tmp" || true
+  collect_files "$TARGET" \
+    | grep -v '/fixtures/bad/' \
+    | grep -v '/\.demo-work/' \
+    | grep -v '/scripts/guardrails/' \
+    >"$files_tmp" || true
 fi
 
 hits=0
 while IFS= read -r line || [ -n "$line" ]; do
   [ -z "$line" ] && continue
   case "$line" in \#*) continue ;; esac
+  # Credential shapes belong to the secrets job.
   case "$line" in
     sk_live_*|AKIA*|-----BEGIN*) continue ;;
   esac

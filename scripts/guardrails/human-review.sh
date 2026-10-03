@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Require human security review label on AI-generated PRs.
+# CI synthesizes pr-meta.yaml from PR labels; fixtures ship their own.
+# Branch protection should also require CODEOWNERS review (see README).
 set -euo pipefail
 
 TARGET="${GUARDRAILS_TARGET:?}"
@@ -23,5 +25,5 @@ if grep -E '^\s*-\s*security-reviewed\s*$' "$META" >/dev/null; then
 fi
 
 echo "AI-generated PR missing required label: security-reviewed"
-echo "Refuse auto-merge until a human attaches the label."
+echo "Refuse auto-merge until a human attaches the label (and CODEOWNERS approve)."
 exit 1

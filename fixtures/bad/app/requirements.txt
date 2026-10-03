@@ -1,5 +1,5 @@
 # Agent-expanded deps — includes packages outside policy allowlist.
-flask==3.0.3
-requests==2.32.3
+flask==3.1.3
+requests==2.33.0
 pickle5==0.0.12
 openai==1.40.0

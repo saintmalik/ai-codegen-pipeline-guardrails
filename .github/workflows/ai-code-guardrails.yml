@@ -1,0 +1,283 @@
+# Devfest Ado Ekiti 2026 — AI Code Guardrails
+# Flow: Prompt → Generate/commit (untrusted) → PR → Guardrails (scan) → Gate (enforce) → Review (approve)
+#
+# Branch protection: require the "gate" check + CODEOWNERS review.
+# For AI-generated PRs, also require the security-reviewed label (human-review job).
+#
+# Single pipeline: CodeQL is the SAST job here (not a separate workflow).
+# Runtime CI/CD observation via cicd-sensor Agent (official action) — see docs/RUNTIME.md.
+#
+# Scanners use maintainer GitHub Actions (SHA-pinned), not ad-hoc `docker run`.
+# Local `make demo` / scripts/run-guardrails.sh may still use CLI or Docker offline.
+
+name: ai-code-guardrails
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: guardrails-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # gitleaks-action PR review comments
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Required for GitHub Organization / Enterprise repos; not needed for personal accounts.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # Align with local demo pin (scripts/guardrails/credential-scan.sh).
+          GITLEAKS_VERSION: "8.30.1"
+
+  sast:
+    name: sast
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: python
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:python"
+
+      - name: Dangerous patterns
+        run: |
+          set -euo pipefail
+          export GUARDRAILS_ROOT="$GITHUB_WORKSPACE"
+          export GUARDRAILS_TARGET="$GITHUB_WORKSPACE"
+          ./scripts/guardrails/dangerous-patterns.sh
+
+      # Optional talk/custom rules — not a second SAST engine.
+      # semgrep/semgrep-action (and returntocorp/*) are archived; Semgrep's current
+      # official GHA pattern is the maintained Semgrep image (digest-pinned below).
+      # SEMGREP_APP_TOKEN is only for Semgrep AppSec Platform — not required for OSS
+      # local rules under .semgrep/.
+      - name: Custom rules (Semgrep, optional)
+        if: hashFiles('.semgrep/**/*.yml') != ''
+        uses: docker://semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b # 1.179.0
+        with:
+          # Image has CMD only (no ENTRYPOINT) — must invoke `semgrep` explicitly.
+          args: >-
+            semgrep scan --config .semgrep --error
+            --exclude fixtures/bad
+            --exclude .demo-work
+            --exclude .git
+            .
+
+  deps:
+    name: deps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Dependency allowlist / check-new-deps
+        run: |
+          set -euo pipefail
+          export GUARDRAILS_ROOT="$GITHUB_WORKSPACE"
+          export GUARDRAILS_TARGET="$GITHUB_WORKSPACE"
+          ./scripts/check-new-deps.sh
+
+      # Maintainer action (step form). Google also ships reusable workflows under
+      # google/osv-scanner-action/.github/workflows/ for PR-diff + SARIF upload.
+      - name: OSV Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --recursive
+            --allow-no-lockfiles
+            ./app
+
+  dockerfile:
+    name: dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Root app Dockerfile only (fixtures/* are for local make demo; bad samples excluded).
+      - name: Hadolint
+        if: hashFiles('Dockerfile') != ''
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+
+  human-review:
+    name: human-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Materialize PR meta from labels
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          # Fail-closed for AI-generated PRs: require security-reviewed label.
+          # Document branch protection + CODEOWNERS as the durable human gate.
+          ai=false
+          echo ",${PR_LABELS}," | grep -qi ',ai-generated,' && ai=true || true
+          {
+            echo "author: ${{ github.actor }}"
+            echo "title: |"
+            echo "  ${{ github.event.pull_request.title }}"
+            echo "ai-generated: ${ai}"
+            echo "labels:"
+            IFS=',' read -r -a labels <<< "${PR_LABELS}"
+            for lab in "${labels[@]}"; do
+              [ -z "$lab" ] && continue
+              echo "  - ${lab}"
+            done
+          } > pr-meta.yaml
+          cat pr-meta.yaml
+
+      - name: Require security-reviewed when ai-generated
+        run: |
+          set -euo pipefail
+          export GUARDRAILS_ROOT="$GITHUB_WORKSPACE"
+          export GUARDRAILS_TARGET="$GITHUB_WORKSPACE"
+          ./scripts/guardrails/human-review.sh
+
+  attest:
+    name: attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DEMO_OIDC_READY: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Print job identity (OIDC-ready)
+        run: |
+          set -euo pipefail
+          echo "repository=${GITHUB_REPOSITORY}"
+          echo "ref=${GITHUB_REF}"
+          echo "workflow=${GITHUB_WORKFLOW}"
+          echo "job=${GITHUB_JOB}"
+          echo "run_id=${GITHUB_RUN_ID}"
+          echo "actor=${GITHUB_ACTOR}"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL set: $([ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && echo yes || echo no)"
+          # Soft stub: demonstrate id-token: write is present. Real orgs mint
+          # the token and bind claims to an identity-aware control plane
+          # (e.g. cicd-sensor Manager) — see docs/RUNTIME.md.
+          echo "Attest/OIDC stub: job is OIDC-capable (demo — not signed provenance)."
+
+      - name: Attestation stub check
+        run: |
+          set -euo pipefail
+          export GUARDRAILS_ROOT="$GITHUB_WORKSPACE"
+          export GUARDRAILS_TARGET="$GITHUB_WORKSPACE"
+          # CI path uses Actions OIDC context; local demos use fixture stub files.
+          ./scripts/guardrails/attest-stub.sh
+
+  # Runtime CI/CD sensing — always present in the pipeline.
+  # Standalone (no Manager secrets): Agent runs in-job and uploads HTML/attestation artifacts.
+  # With secrets: also delivers logs/config via Manager.
+  # Docs: https://cicd-sensor.github.io/user-guide/github-hosted.html
+  cicd-sensor:
+    name: cicd-sensor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Place first so the Agent observes the whole job (official recommendation).
+      - name: Start cicd-sensor Agent
+        uses: cicd-sensor/cicd-sensor-action@6511eb44c91d71b2b93d71193b1bf2cb18352f66 # v0.0.38
+        with:
+          # Empty URL → standalone demo mode (report + attestation artifacts).
+          # Set both secrets together for Manager delivery.
+          manager-url: ${{ secrets.CICD_SENSOR_MANAGER_URL }}
+          manager-token: ${{ secrets.CICD_SENSOR_MANAGER_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Observed demo workload
+        env:
+          HAS_MANAGER_URL: ${{ secrets.CICD_SENSOR_MANAGER_URL != '' }}
+          HAS_MANAGER_TOKEN: ${{ secrets.CICD_SENSOR_MANAGER_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          echo "cicd-sensor Agent is observing this GitHub Actions job."
+          if [ "${HAS_MANAGER_URL}" = "true" ] && [ "${HAS_MANAGER_TOKEN}" = "true" ]; then
+            echo "Manager delivery: ENABLED (CICD_SENSOR_MANAGER_URL + CICD_SENSOR_MANAGER_TOKEN)"
+          elif [ "${HAS_MANAGER_URL}" = "true" ] || [ "${HAS_MANAGER_TOKEN}" = "true" ]; then
+            echo "::warning::Partial Manager config — set BOTH CICD_SENSOR_MANAGER_URL and CICD_SENSOR_MANAGER_TOKEN (see docs/RUNTIME.md). Continuing in standalone mode if the action allows."
+          else
+            echo "Manager delivery: standalone demo mode (no Manager secrets)."
+            echo "Set repo secrets CICD_SENSOR_MANAGER_URL + CICD_SENSOR_MANAGER_TOKEN to enable Manager."
+          fi
+          # Light activity for the runtime trace (process exec / network-free).
+          uname -a
+          ls -la .cicd-sensor 2>/dev/null || echo "(no .cicd-sensor/ — baseline rules still apply in standalone)"
+
+  gate:
+    name: gate
+    if: always()
+    needs: [secrets, sast, deps, dockerfile, human-review, attest, cicd-sensor]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail closed unless all guardrail jobs succeeded
+        run: |
+          set -euo pipefail
+          echo "secrets:       ${{ needs.secrets.result }}"
+          echo "sast:          ${{ needs.sast.result }}"
+          echo "deps:          ${{ needs.deps.result }}"
+          echo "dockerfile:    ${{ needs.dockerfile.result }}"
+          echo "human-review:  ${{ needs.human-review.result }}"
+          echo "attest:        ${{ needs.attest.result }}"
+          echo "cicd-sensor:   ${{ needs.cicd-sensor.result }}"
+          for r in \
+            "${{ needs.secrets.result }}" \
+            "${{ needs.sast.result }}" \
+            "${{ needs.deps.result }}" \
+            "${{ needs.dockerfile.result }}" \
+            "${{ needs.human-review.result }}" \
+            "${{ needs.attest.result }}" \
+            "${{ needs.cicd-sensor.result }}"
+          do
+            if [ "$r" != "success" ]; then
+              echo "==> RESULT: BLOCKED (gate red — fix and push, then re-run)"
+              exit 1
+            fi
+          done
+          echo "==> RESULT: ALLOW (gate green — ready for human review / approve)"

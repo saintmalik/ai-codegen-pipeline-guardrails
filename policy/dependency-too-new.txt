@@ -1,0 +1,4 @@
+# Packages treated as too new / unvetted for automatic AI PR merge.
+# Agents often pull these "to be helpful"; require a human to allowlist later.
+openai
+pickle5

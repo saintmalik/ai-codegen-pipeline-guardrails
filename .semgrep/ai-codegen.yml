@@ -1,5 +1,5 @@
-# Optional Semgrep starter — used only if `semgrep` is on PATH.
-# Graduate grep heuristics here when the talk audience asks "what about real SAST?"
+# Semgrep rules for AI-generated PRs (Devfest Ado Ekiti 2026 demo).
+# Catches common "helpful" agent anti-patterns in the bad fixture.
 
 rules:
   - id: ai-codegen.python-eval

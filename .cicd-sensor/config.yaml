@@ -1,0 +1,7 @@
+# Standalone GitHub-hosted mode (no Manager).
+# When CICD_SENSOR_MANAGER_URL is set, Manager owns config/rules instead.
+# See https://cicd-sensor.github.io/user-guide/github-hosted.html
+default_max_alerts_per_rule: 20
+disable_baseline_rules: false
+# Recommended for first demo rollout: treat terminate as detect.
+monitor_mode: true
